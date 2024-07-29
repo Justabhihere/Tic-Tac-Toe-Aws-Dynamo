@@ -31,7 +31,7 @@ class GameController:
             )
             return True
         except ClientError as e:
-            print(f"Error accepting game invite: {e}")
+            print("Error accepting game invite: {}".format(e))
             return False
 
     def getGame(self, gameId):
@@ -42,7 +42,7 @@ class GameController:
             response = self.gamesTable.get_item(Key={"GameId": gameId})
             return response.get('Item')
         except ClientError as e:
-            print(f"Error getting game: {e}")
+            print("Error getting game: {}".format(e))
             return None
 
     def getBoardState(self, gameItem):
@@ -75,7 +75,7 @@ class GameController:
             )
             return True
         except ClientError as e:
-            print(f"Error updating game state: {e}")
+            print("Error updating game state: {}".format(e))
             return False
 
     def createNewGame(self, gameId, creator, invitee):
@@ -94,7 +94,7 @@ class GameController:
             self.gamesTable.put_item(Item=item)
             return True
         except ClientError as e:
-            print(f"Error creating new game: {e}")
+            print("Error creating new game: {}".format(e))
             return False
 
     def updateGameState(self, gameId, position, marker):
@@ -117,7 +117,7 @@ class GameController:
             )
             return True
         except ClientError as e:
-            print(f"Error updating game state: {e}")
+            print("Error updating game state: {}".format(e))
             return False
 
     def getGameInvites(self, username):
@@ -134,7 +134,7 @@ class GameController:
             )
             return response.get('Items', [])
         except ClientError as e:
-            print(f"Error getting game invites: {e}")
+            print("Error getting game invites: {}".format(e))
             return []
 
     def getGamesWithStatus(self, username, status):
@@ -151,7 +151,7 @@ class GameController:
             )
             return response.get('Items', [])
         except ClientError as e:
-            print(f"Error getting games with status {status}: {e}")
+            print("Error getting games with status {}: {}".format(status, e))
             return []
 
     def checkIfTableIsActive(self):
@@ -162,5 +162,5 @@ class GameController:
             response = self.cm.dynamodb.describe_table(TableName='Games')
             return response['Table']['TableStatus'] == 'ACTIVE'
         except ClientError as e:
-            print(f"Error checking if table is active: {e}")
+            print("Error checking if table is active: {}".format(e))
             return False
