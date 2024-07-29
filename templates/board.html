@@ -1,12 +1,12 @@
-{% extends "base.html" %}
-{% block content %}
-<link rel="stylesheet" type="text/css" href="static/customize/tictactoe.css">
+{% extends "base.html" %} {% block content %}
+<link rel="stylesheet" type="text/css" href="static/customize/tictactoe.css" />
 <style>
   :root {
     --primary-color: #1d3557;
     --secondary-color: #f1faee;
     --accent-color: #457b9d;
-    --button-color: #a8dadc;
+    --button-color: black;
+    --text-color: white;
     --hover-color: #457b9d;
     --active-color: #1d3557;
   }
@@ -24,14 +24,17 @@
     font-size: 2.5rem;
     margin-bottom: 2rem;
     color: var(--secondary-color);
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
   }
 
   .TTTBoard {
     background-color: var(--secondary-color);
     border-radius: 10px;
     padding: 1rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   .table {
@@ -40,9 +43,11 @@
   }
 
   .square {
-    width: 33.33%;
-    height: 120px;
-    position: relative;
+    width: 100%;
+    height: 100px; /* Adjust height as needed */
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
 
   .tictactoesquare {
@@ -51,11 +56,10 @@
     font-size: 3.5rem;
     font-weight: bold;
     background-color: var(--button-color);
-    color: var(--primary-color);
+    color: var(--text-color);
     border: none;
-    transition: all 0.3s ease;
+    cursor: pointer;
   }
-
   .tictactoesquare:hover {
     background-color: var(--hover-color);
     color: var(--secondary-color);
@@ -87,19 +91,100 @@
     <table class="table">
       <form action="/select={{ gameId }}" method="post">
         <tr>
-          <td class="square"><button type="submit" class="btn tictactoesquare" name="cell" value="TopLeft">{{ TopLeft }}</button></td>
-          <td class="square v"><button type="submit" class="btn tictactoesquare" name="cell" value="TopMiddle">{{ TopMiddle }}</button></td>
-          <td class="square"><button type="submit" class="btn tictactoesquare" name="cell" value="TopRight">{{ TopRight }}</button></td>
+          <td class="square">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="TopLeft"
+            >
+              {{ TopLeft }}
+            </button>
+          </td>
+          <td class="square v">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="TopMiddle"
+            >
+              {{ TopMiddle }}
+            </button>
+          </td>
+          <td class="square">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="TopRight"
+            >
+              {{ TopRight }}
+            </button>
+          </td>
         </tr>
         <tr>
-          <td class="square h"><button type="submit" class="btn tictactoesquare" name="cell" value="MiddleLeft">{{ MiddleLeft }}</button></td>
-          <td class="square v h"><button type="submit" class="btn tictactoesquare" name="cell" value="MiddleMiddle">{{ MiddleMiddle }}</button></td>
-          <td class="square h"><button type="submit" class="btn tictactoesquare" name="cell" value="MiddleRight">{{ MiddleRight }}</button></td>
+          <td class="square h">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="MiddleLeft"
+            >
+              {{ MiddleLeft }}
+            </button>
+          </td>
+          <td class="square v h">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="MiddleMiddle"
+            >
+              {{ MiddleMiddle }}
+            </button>
+          </td>
+          <td class="square h">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="MiddleRight"
+            >
+              {{ MiddleRight }}
+            </button>
+          </td>
         </tr>
         <tr>
-          <td class="square"><button type="submit" class="btn tictactoesquare" name="cell" value="BottomLeft">{{ BottomLeft }}</button></td>
-          <td class="square v"><button type="submit" class="btn tictactoesquare" name="cell" value="BottomMiddle">{{ BottomMiddle }}</button></td>
-          <td class="square"><button type="submit" class="btn tictactoesquare" name="cell" value="BottomRight">{{ BottomRight }}</button></td>
+          <td class="square">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="BottomLeft"
+            >
+              {{ BottomLeft }}
+            </button>
+          </td>
+          <td class="square v">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="BottomMiddle"
+            >
+              {{ BottomMiddle }}
+            </button>
+          </td>
+          <td class="square">
+            <button
+              type="submit"
+              class="btn tictactoesquare"
+              name="cell"
+              value="BottomRight"
+            >
+              {{ BottomRight }}
+            </button>
+          </td>
         </tr>
       </form>
     </table>
