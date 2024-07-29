@@ -237,9 +237,9 @@ def selectSquare(gameId):
     if not controller.updateBoardAndTurn(item, value, session["username"]):
         flash("You have selected a square either when it's not your turn, the square is already selected, or the game is not 'In-Progress'.",
               "updateError")
-        return redirect(f"/game={gameId}")
-
-    return redirect(f"/game={gameId}")
+        return redirect("/game={}".format(gameId))
+    
+    return redirect("/game=" + game['GameId'])
 
 if __name__ == "__main__":
     application.run(host='0.0.0.0', port=serverPort)
