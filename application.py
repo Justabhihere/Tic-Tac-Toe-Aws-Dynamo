@@ -8,11 +8,9 @@ import time
 
 # Append the path of the dynamodb directory to sys.path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'dynamodb'))
-sys.path.append(os.path.join(os.path.dirname(__file__), 'models'))
-from dynamodb.connectionManager import ConnectionManager
-from dynamodb.gameController import GameController
-from models.game import Game
 
+from connectionManager import ConnectionManager
+from gameController import GameController
 from models.game import Game
 
 application = Flask(__name__)
@@ -98,7 +96,7 @@ def index():
     inviteGames = [Game(inviteGame) for inviteGame in inviteGames]
 
     inProgressGames = controller.getGamesWithStatus(session.get("username"), "IN_PROGRESS")
-    inProgressGames = [Game(inProgressGame) for inProgressGame in inProgressGames]
+    inProgressGames = [Game(inProgressGame) for inProgressGames in inProgressGames]
 
     finishedGames = controller.getGamesWithStatus(session.get("username"), "FINISHED")
     fs = [Game(finishedGame) for finishedGame in finishedGames]
@@ -182,64 +180,18 @@ def game(gameId):
                            BottomMiddle=boardState[7],
                            BottomRight=boardState[8])
 
-@application.route('/gameData=<gameId>')
-def gameData(gameId):
-    item = controller.getGame(gameId)
-    boardState = controller.getBoardState(item)
-    if item is None:
-        return jsonify(error='That game does not exist')
+@application.route('/update', methods=["POST"])
+def update():
+    form = request.form
+    if form:
+        gameId = form["gameId"]
+        position = form["position"]
+        marker = form["marker"]
 
-    game = Game(item)
-    return jsonify(gameId=gameId,
-                   status=game.status,
-                   turn=game.turn,
-                   board=boardState)
+        if controller.updateGameState(gameId, int(position), marker):
+            return jsonify(success=True)
 
-@application.route('/accept=<invite>', methods=["POST"])
-def accept(invite):
-    gameId = request.form["response"]
-    game = controller.getGame(gameId)
+    return jsonify(success=False)
 
-    if game is None:
-        flash("That game does not exist anymore.")
-        return redirect("/index")
-
-    if not controller.acceptGameInvite(game):
-        flash("Error validating the game...")
-        return redirect("/index")
-
-    return redirect("/game={}".format(game['GameId']))
-
-@application.route('/reject=<invite>', methods=["POST"])
-def reject(invite):
-    gameId = request.form["response"]
-    game = controller.getGame(gameId)
-
-    if game is None:
-        flash("That game doesn't exist anymore.")
-        return redirect("/index")
-
-    if not controller.rejectGameInvite(game):
-        flash("Something went wrong when deleting invite.")
-        return redirect("/index")
-
-    return redirect("/index")
-
-@application.route('/select=<gameId>', methods=["POST"])
-def selectSquare(gameId):
-    value = request.form["cell"]
-
-    item = controller.getGame(gameId)
-    if item is None:
-        flash("This is not a valid game.")
-        return redirect("/index")
-
-    if not controller.updateBoardAndTurn(item, value, session["username"]):
-        flash("You have selected a square either when it's not your turn, the square is already selected, or the game is not 'In-Progress'.",
-              "updateError")
-        return redirect("/game={}".format(gameId))
-    
-    return redirect("/game=" + game['GameId'])
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     application.run(host='0.0.0.0', port=serverPort)
