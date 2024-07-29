@@ -17,8 +17,6 @@ application = Flask(__name__)
 application.debug = True
 application.secret_key = str(uuid4())
 
-cm = None
-
 parser = argparse.ArgumentParser(description='Run the TicTacToe sample app', prog='application.py')
 parser.add_argument('--config', help='Path to the config file containing application settings.')
 parser.add_argument('--mode', help='Whether to connect to a DynamoDB service endpoint, or to connect to DynamoDB Local.',
@@ -61,7 +59,7 @@ if serverPort is None:
 
 @application.route('/logout')
 def logout():
-    session["username"] = None
+    session.pop("username", None)
     return redirect("/index")
 
 @application.route('/table', methods=["GET", "POST"])
@@ -74,16 +72,14 @@ def createTable():
 @application.route('/')
 @application.route('/index', methods=["GET", "POST"])
 def index():
-    if session == {} or session.get("username", None) is None:
+    if session.get("username") is None:
         form = request.form
         if form:
-            formInput = form["username"]
-            if formInput and formInput.strip():
-                session["username"] = request.form["username"]
+            formInput = form.get("username", "").strip()
+            if formInput:
+                session["username"] = formInput
             else:
-                session["username"] = None
-        else:
-            session["username"] = None
+                session.pop("username", None)
 
     if request.method == "POST":
         return redirect('/index')
@@ -96,7 +92,7 @@ def index():
     inviteGames = [Game(inviteGame) for inviteGame in inviteGames]
 
     inProgressGames = controller.getGamesWithStatus(session.get("username"), "IN_PROGRESS")
-    inProgressGames = [Game(inProgressGame) for inProgressGames in inProgressGames]
+    inProgressGames = [Game(inProgressGame) for inProgressGame in inProgressGames]
 
     finishedGames = controller.getGamesWithStatus(session.get("username"), "FINISHED")
     fs = [Game(finishedGame) for finishedGame in finishedGames]
@@ -109,7 +105,7 @@ def index():
 
 @application.route('/create')
 def create():
-    if session.get("username", None) is None:
+    if session.get("username") is None:
         flash("Need to login to create game")
         return redirect("/index")
     return render_template("create.html", user=session["username"])
@@ -120,10 +116,10 @@ def play():
     if form:
         creator = session["username"]
         gameId = str(uuid4())
-        invitee = form["invitee"].strip()
+        invitee = form.get("invitee", "").strip()
 
         if not invitee or creator == invitee:
-            flash("Use valid a name (not empty or your name)")
+            flash("Use a valid name (not empty or your name)")
             return redirect("/create")
 
         if controller.createNewGame(gameId, creator, invitee):
@@ -134,7 +130,7 @@ def play():
 
 @application.route('/game=<gameId>')
 def game(gameId):
-    if session.get("username", None) is None:
+    if session.get("username") is None:
         flash("Need to login")
         return redirect("/index")
 
@@ -184,12 +180,13 @@ def game(gameId):
 def update():
     form = request.form
     if form:
-        gameId = form["gameId"]
-        position = form["position"]
-        marker = form["marker"]
+        gameId = form.get("gameId")
+        position = form.get("position")
+        marker = form.get("marker")
 
-        if controller.updateGameState(gameId, int(position), marker):
-            return jsonify(success=True)
+        if gameId and position and marker:
+            result = controller.updateBoardAndTurn(gameId, position, marker)
+            return jsonify(success=result)
 
     return jsonify(success=False)
 
