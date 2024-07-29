@@ -17,8 +17,6 @@ application = Flask(__name__)
 application.debug = True
 application.secret_key = str(uuid4())
 
-cm = None
-
 parser = argparse.ArgumentParser(description='Run the TicTacToe sample app', prog='application.py')
 parser.add_argument('--config', help='Path to the config file containing application settings.')
 parser.add_argument('--mode', help='Whether to connect to a DynamoDB service endpoint, or to connect to DynamoDB Local.',
@@ -61,7 +59,7 @@ if serverPort is None:
 
 @application.route('/logout')
 def logout():
-    session["username"] = None
+    session.pop("username", None)
     return redirect("/index")
 
 @application.route('/table', methods=["GET", "POST"])
@@ -70,50 +68,48 @@ def createTable():
         cm.createGamesTable()
         while not controller.checkIfTableIsActive():
             time.sleep(3)
-    except Exception as e:
-        flash("Error creating table: {}".format(e))
         return redirect('/index')
-    return redirect('/index')
+    except Exception as e:
+        flash(f"Error creating table: {e}")
+        return redirect('/index')
 
 @application.route('/')
 @application.route('/index', methods=["GET", "POST"])
 def index():
-    if session == {} or session.get("username", None) is None:
-        form = request.form
-        if form:
-            formInput = form.get("username", "").strip()
+    if session.get("username") is None:
+        if request.method == "POST":
+            formInput = request.form.get("username", "").strip()
             if formInput:
                 session["username"] = formInput
             else:
-                session["username"] = None
-        else:
-            session["username"] = None
+                session.pop("username", None)
 
-    if request.method == "POST":
-        return redirect('/index')
+    username = session.get("username")
+    if username is None:
+        return render_template("index.html", user=None)
 
-    inviteGames = controller.getGameInvites(session.get("username"))
+    inviteGames = controller.getGameInvites(username)
     if inviteGames is None:
         flash("Table has not been created yet, please follow this link to create table.")
-        return render_template("table.html", user="")
+        return render_template("table.html", user=username)
 
     inviteGames = [Game(inviteGame) for inviteGame in inviteGames]
 
-    inProgressGames = controller.getGamesWithStatus(session.get("username"), "IN_PROGRESS")
+    inProgressGames = controller.getGamesWithStatus(username, "IN_PROGRESS")
     inProgressGames = [Game(inProgressGame) for inProgressGame in inProgressGames]
 
-    finishedGames = controller.getGamesWithStatus(session.get("username"), "FINISHED")
+    finishedGames = controller.getGamesWithStatus(username, "FINISHED")
     fs = [Game(finishedGame) for finishedGame in finishedGames]
 
     return render_template("index.html",
-                           user=session.get("username"),
+                           user=username,
                            invites=inviteGames,
                            inprogress=inProgressGames,
                            finished=fs)
 
 @application.route('/create')
 def create():
-    if session.get("username", None) is None:
+    if session.get("username") is None:
         flash("Need to login to create game")
         return redirect("/index")
     return render_template("create.html", user=session.get("username"))
@@ -123,23 +119,28 @@ def play():
     form = request.form
     if form:
         creator = session.get("username")
+        if creator is None:
+            flash("You need to log in to create a game.")
+            return redirect("/index")
+        
         gameId = str(uuid4())
         invitee = form.get("invitee", "").strip()
 
         if not invitee or creator == invitee:
-            flash("Use valid a name (not empty or your name)")
+            flash("Use a valid name (not empty or your name)")
             return redirect("/create")
 
         if controller.createNewGame(gameId, creator, invitee):
-            return redirect("/game={}".format(gameId))
+            return redirect(f"/game={gameId}")
 
     flash("Something went wrong creating the game.")
     return redirect("/create")
 
 @application.route('/game=<gameId>')
 def game(gameId):
-    if session.get("username", None) is None:
-        flash("Need to login")
+    username = session.get("username")
+    if username is None:
+        flash("Need to log in")
         return redirect("/index")
 
     item = controller.getGame(gameId)
@@ -148,17 +149,17 @@ def game(gameId):
         return redirect("/index")
 
     boardState = controller.getBoardState(item)
-    result = controller.checkForGameResult(boardState, item, session.get("username"))
+    result = controller.checkForGameResult(boardState, item, username)
 
     if result is not None:
-        if not controller.changeGameToFinishedState(item, result, session.get("username")):
-            flash("Some error occurred while trying to finish game.")
+        if not controller.changeGameToFinishedState(item, result, username):
+            flash("Some error occurred while trying to finish the game.")
 
     game = Game(item)
     status = game.status
     turn = game.turn
 
-    if game.getResult(session.get("username")) is None:
+    if game.getResult(username) is None:
         if turn == game.o:
             turn += " (O)"
         else:
@@ -169,10 +170,10 @@ def game(gameId):
     return render_template("play.html",
                            gameId=gameId,
                            gameJson=gameJson,
-                           user=session.get("username"),
+                           user=username,
                            status=status,
                            turn=turn,
-                           opponent=game.getOpposingPlayer(session.get("username")),
+                           opponent=game.getOpposingPlayer(username),
                            result=result,
                            TopLeft=boardState[0],
                            TopMiddle=boardState[1],
@@ -192,8 +193,9 @@ def update():
         position = form.get("position")
         marker = form.get("marker")
 
-        if controller.updateGameState(gameId, int(position), marker):
-            return jsonify(success=True)
+        if gameId and position and marker:
+            result = controller.updateBoardAndTurn(gameId, position, marker)
+            return jsonify(success=result)
 
     return jsonify(success=False)
 
