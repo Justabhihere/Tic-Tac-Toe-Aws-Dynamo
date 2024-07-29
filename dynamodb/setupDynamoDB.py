@@ -21,7 +21,7 @@ def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, us
             print("Incomplete AWS credentials.")
             raise
         except Exception as e:
-            print(f"Error connecting to DynamoDB: {e}")
+            print("Error connecting to DynamoDB: {}".format(e))
             raise
 
     return dynamodb
@@ -89,5 +89,5 @@ def createGamesTable(dynamodb):
         return table
 
     except Exception as e:
-        print(f"Error creating table: {e}")
+        print("Error creating table: {}".format(e))
         raise

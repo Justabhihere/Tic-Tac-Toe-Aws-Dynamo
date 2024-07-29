@@ -31,5 +31,5 @@ class ConnectionManager:
             self.getGamesTable()  # Ensure the table is loaded
             return self.gamesTable.table_status == 'ACTIVE'
         except Exception as e:
-            print(f"Error checking table status: {e}")
+            print("Error checking table status: {}".format(e))
             return False
