@@ -84,21 +84,26 @@ def index():
     if request.method == "POST":
         return redirect('/index')
 
-    inviteGames = controller.getGameInvites(session.get("username"))
+    username = session.get("username")
+    if username is None:
+        flash("You need to log in to view game invites.")
+        return redirect("/index")
+
+    inviteGames = controller.getGameInvites(username)
     if inviteGames is None:
         flash("Table has not been created yet, please follow this link to create table.")
         return render_template("table.html", user="")
 
     inviteGames = [Game(inviteGame) for inviteGame in inviteGames]
 
-    inProgressGames = controller.getGamesWithStatus(session.get("username"), "IN_PROGRESS")
+    inProgressGames = controller.getGamesWithStatus(username, "IN_PROGRESS")
     inProgressGames = [Game(inProgressGame) for inProgressGame in inProgressGames]
 
-    finishedGames = controller.getGamesWithStatus(session.get("username"), "FINISHED")
+    finishedGames = controller.getGamesWithStatus(username, "FINISHED")
     fs = [Game(finishedGame) for finishedGame in finishedGames]
 
     return render_template("index.html",
-                           user=session["username"],
+                           user=username,
                            invites=inviteGames,
                            inprogress=inProgressGames,
                            finished=fs)
@@ -108,13 +113,17 @@ def create():
     if session.get("username") is None:
         flash("Need to login to create game")
         return redirect("/index")
-    return render_template("create.html", user=session["username"])
+    return render_template("create.html", user=session.get("username"))
 
 @application.route('/play', methods=["POST"])
 def play():
     form = request.form
     if form:
-        creator = session["username"]
+        creator = session.get("username")
+        if creator is None:
+            flash("You need to log in to create a game.")
+            return redirect("/index")
+        
         gameId = str(uuid4())
         invitee = form.get("invitee", "").strip()
 
@@ -130,8 +139,9 @@ def play():
 
 @application.route('/game=<gameId>')
 def game(gameId):
-    if session.get("username") is None:
-        flash("Need to login")
+    username = session.get("username")
+    if username is None:
+        flash("Need to log in")
         return redirect("/index")
 
     item = controller.getGame(gameId)
@@ -140,17 +150,17 @@ def game(gameId):
         return redirect("/index")
 
     boardState = controller.getBoardState(item)
-    result = controller.checkForGameResult(boardState, item, session["username"])
+    result = controller.checkForGameResult(boardState, item, username)
 
     if result is not None:
-        if not controller.changeGameToFinishedState(item, result, session["username"]):
-            flash("Some error occurred while trying to finish game.")
+        if not controller.changeGameToFinishedState(item, result, username):
+            flash("Some error occurred while trying to finish the game.")
 
     game = Game(item)
     status = game.status
     turn = game.turn
 
-    if game.getResult(session["username"]) is None:
+    if game.getResult(username) is None:
         if turn == game.o:
             turn += " (O)"
         else:
@@ -161,10 +171,10 @@ def game(gameId):
     return render_template("play.html",
                            gameId=gameId,
                            gameJson=gameJson,
-                           user=session["username"],
+                           user=username,
                            status=status,
                            turn=turn,
-                           opponent=game.getOpposingPlayer(session["username"]),
+                           opponent=game.getOpposingPlayer(username),
                            result=result,
                            TopLeft=boardState[0],
                            TopMiddle=boardState[1],
