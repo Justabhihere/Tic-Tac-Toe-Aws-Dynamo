@@ -4,7 +4,8 @@ from botocore.exceptions import ClientError
 class GameController:
     def __init__(self, connectionManager):
         self.cm = connectionManager
-        self.gamesTable = self.cm.getTable('Games')
+        # Access the table directly from the dynamodb resource
+        self.gamesTable = self.cm.dynamodb.Table('Games')
 
     def acceptGameInvite(self, game):
         """
