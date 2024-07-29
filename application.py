@@ -208,7 +208,7 @@ def accept(invite):
         flash("Error validating the game...")
         return redirect("/index")
 
-    return redirect(f"/game={game['GameId']}")
+    return redirect("/game={}".format(game['GameId']))
 
 @application.route('/reject=<invite>', methods=["POST"])
 def reject(invite):
