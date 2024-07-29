@@ -1,20 +1,53 @@
+import boto3
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 from datetime import datetime
-from botocore.exceptions import ClientError
 
 class GameController:
     def __init__(self, connectionManager):
         self.cm = connectionManager
-        # Access the table directly from the dynamodb resource
-        self.gamesTable = self.cm.dynamodb.Table('Games')
+        self.dynamodb = self.cm.dynamodb
+        self.gamesTable = self.cm.getGamesTable()
+
+    def createNewGame(self, gameId, creator, invitee):
+        now = str(datetime.now())
+        statusDate = "PENDING_" + now
+        item = {
+            "GameId": gameId,
+            "HostId": creator,
+            "StatusDate": statusDate,
+            "OUser": creator,
+            "Turn": invitee,
+            "OpponentId": invitee
+        }
+        try:
+            self.gamesTable.put_item(Item=item)
+            return True
+        except ClientError as e:
+            print("Error creating new game: {}".format(e))
+            return False
+
+    def checkIfTableIsActive(self):
+        try:
+            description = self.dynamodb.meta.client.describe_table(TableName=self.gamesTable.name)
+            status = description['Table']['TableStatus']
+            return status == "ACTIVE"
+        except ClientError as e:
+            print("Error checking table status: {}".format(e))
+            return False
+
+    def getGame(self, gameId):
+        try:
+            response = self.gamesTable.get_item(Key={"GameId": gameId})
+            return response.get('Item', None)
+        except ClientError as e:
+            print("Error retrieving game: {}".format(e))
+            return None
 
     def acceptGameInvite(self, game):
-        """
-        Accept a game invite and update the game status to IN_PROGRESS.
-        """
         date = str(datetime.now())
         status = "IN_PROGRESS_"
         statusDate = status + date
-        key = {"GameId": game.get("GameId")}
+        key = {"GameId": game["GameId"]}
         attributeUpdates = {
             "StatusDate": {"Value": statusDate, "Action": "PUT"}
         }
@@ -35,146 +68,182 @@ class GameController:
             print("Error accepting game invite: {}".format(e))
             return False
 
-    def getGame(self, gameId):
-        """
-        Retrieve a game item from the DynamoDB table.
-        """
-        try:
-            response = self.gamesTable.get_item(Key={"GameId": gameId})
-            return response.get('Item')
-        except ClientError as e:
-            print("Error getting game: {}".format(e))
-            return None
-
-    def getBoardState(self, gameItem):
-        """
-        Get the board state from the game item.
-        """
-        return gameItem.get('BoardState', [None]*9)
-
-    def checkForGameResult(self, boardState, gameItem, username):
-        """
-        Check if the game has a result based on the board state and game item.
-        """
-        # Placeholder for game result checking logic
-        # Example implementation: check if there is a result key
-        return gameItem.get('Result', None)
-
-    def changeGameToFinishedState(self, gameItem, result, username):
-        """
-        Change the game state to finished and update the result.
-        """
-        key = {"GameId": gameItem.get("GameId")}
-        attributeUpdates = {
-            "Status": {"Value": "FINISHED", "Action": "PUT"},
-            "Result": {"Value": result, "Action": "PUT"}
+    def rejectGameInvite(self, game):
+        key = {"GameId": game["GameId"]}
+        condition = {
+            "StatusDate": {
+                "AttributeValueList": ["PENDING_"],
+                "ComparisonOperator": "BEGINS_WITH"
+            }
         }
+        try:
+            self.gamesTable.delete_item(Key=key, Expected=condition)
+            return True
+        except ClientError as e:
+            print("Error rejecting game invite: {}".format(e))
+            return False
+
+    def getGameInvites(self, user):
+        if user is None:
+            return []
+        try:
+            response = self.gamesTable.query(
+                IndexName="OpponentId-StatusDate-index",
+                KeyConditionExpression="OpponentId = :v_user AND begins_with(StatusDate, :v_status)",
+                ExpressionAttributeValues={
+                    ":v_user": user,
+                    ":v_status": "PENDING_"
+                },
+                Limit=10
+            )
+            return response.get('Items', [])
+        except ClientError as e:
+            print("Error getting game invites: {}".format(e))
+            return []
+
+    def updateBoardAndTurn(self, item, position, current_player):
+        player_one = item["HostId"]
+        player_two = item["OpponentId"]
+        gameId = item["GameId"]
+        statusDate = item["StatusDate"]
+        date = statusDate.split("_")[1]
+
+        representation = "X" if item["OUser"] == current_player else "O"
+        next_player = player_two if current_player == player_one else player_one
+
+        key = {"GameId": gameId}
+        attributeUpdates = {
+            position: {"Value": representation, "Action": "PUT"},
+            "Turn": {"Value": next_player, "Action": "PUT"}
+        }
+        conditions = {
+            "StatusDate": {
+                "AttributeValueList": ["IN_PROGRESS_"],
+                "ComparisonOperator": "BEGINS_WITH"
+            },
+            "Turn": {"Value": current_player},
+            position: {"Exists": False}
+        }
+
         try:
             self.gamesTable.update_item(
                 Key=key,
-                AttributeUpdates=attributeUpdates
+                AttributeUpdates=attributeUpdates,
+                Expected=conditions
             )
             return True
         except ClientError as e:
-            print("Error updating game state: {}".format(e))
+            print("Error updating board and turn: {}".format(e))
             return False
 
-    def createNewGame(self, gameId, creator, invitee):
-        """
-        Create a new game and add it to the DynamoDB table.
-        """
-        item = {
-            "GameId": gameId,
-            "Creator": creator,
-            "Invitee": invitee,
-            "StatusDate": "PENDING_",
-            "BoardState": [None]*9,
-            "Turn": creator
-        }
+    def getBoardState(self, item):
+        squares = ["TopLeft", "TopMiddle", "TopRight", "MiddleLeft", "MiddleMiddle", "MiddleRight",
+                   "BottomLeft", "BottomMiddle", "BottomRight"]
+        return [item.get(square, " ") for square in squares]
+
+    def checkForGameResult(self, board, item, current_player):
+        yourMarker = "X" if current_player == item["OUser"] else "O"
+        theirMarker = "O" if yourMarker == "X" else "X"
+
+        winConditions = [[0, 3, 6], [0, 1, 2], [0, 4, 8],
+                         [1, 4, 7], [2, 5, 8], [2, 4, 6],
+                         [3, 4, 5], [6, 7, 8]]
+
+        for winCondition in winConditions:
+            if all(board[i] == yourMarker for i in winCondition):
+                return "Win"
+            if all(board[i] == theirMarker for i in winCondition):
+                return "Lose"
+
+        if self.checkForTie(board):
+            return "Tie"
+
+        return None
+
+    def checkForTie(self, board):
+        return all(cell != " " for cell in board)
+
+    def changeGameToFinishedState(self, item, result, current_user):
+        if item.get("Result"):
+            return True
+
+        date = str(datetime.now())
+        status = "FINISHED_" + date
+
+        item["StatusDate"] = status
+        item["Turn"] = "N/A"
+        if result == "Tie":
+            item["Result"] = result
+        elif result == "Win":
+            item["Result"] = current_user
+        else:
+            item["Result"] = item["OpponentId"] if item["HostId"] == current_user else item["HostId"]
+
         try:
             self.gamesTable.put_item(Item=item)
             return True
         except ClientError as e:
-            print("Error creating new game: {}".format(e))
+            print("Error changing game to finished state: {}".format(e))
             return False
 
-    def updateGameState(self, gameId, position, marker):
-        """
-        Update the board state of the game.
-        """
+    def mergeQueries(self, host, opp, limit=10):
+        games = []
         try:
-            response = self.gamesTable.get_item(Key={"GameId": gameId})
-            item = response.get('Item', {})
-            boardState = item.get('BoardState', [None]*9)
-            boardState[position] = marker
+            while len(games) < limit:
+                try:
+                    game_one = next(host)
+                except StopIteration:
+                    for game in opp:
+                        if len(games) == limit:
+                            break
+                        games.append(game)
+                    return games
 
-            attributeUpdates = {
-                "BoardState": {"Value": boardState, "Action": "PUT"},
-                "Turn": {"Value": marker, "Action": "PUT"}  # Switch turn
-            }
-            self.gamesTable.update_item(
-                Key={"GameId": gameId},
-                AttributeUpdates=attributeUpdates
-            )
-            return True
-        except ClientError as e:
-            print("Error updating game state: {}".format(e))
-            return False
+                try:
+                    game_two = next(opp)
+                except StopIteration:
+                    for game in host:
+                        if len(games) == limit:
+                            break
+                        games.append(game)
+                    return games
 
-def acceptGameInvite(self, game, username):
-    """
-    Accept a game invite and update the game status to IN_PROGRESS.
-    """
-    date = str(datetime.now())
-    status = "IN_PROGRESS_"
-    statusDate = status + date
-    key = {"GameId": game.get("GameId")}
-    attributeUpdates = {
-        "StatusDate": {"Value": statusDate, "Action": "PUT"},
-        "AcceptedBy": {"Value": username, "Action": "PUT"}  # Store the username who accepted
-    }
-    conditions = {
-        "StatusDate": {
-            "AttributeValueList": ["PENDING_"],
-            "ComparisonOperator": "BEGINS_WITH"
-        }
-    }
-    try:
-        self.gamesTable.update_item(
-            Key=key,
-            AttributeUpdates=attributeUpdates,
-            Expected=conditions
-        )
-        return True
-    except ClientError as e:
-        print("Error accepting game invite: {}".format(e))
-        return False
+                if game_one > game_two:
+                    games.append(game_one)
+                else:
+                    games.append(game_two)
 
+        except StopIteration:
+            pass
 
-    def getGamesWithStatus(self, username, status):
-        """
-        Get all games for a user with a specific status.
-        """
-        try:
-            response = self.gamesTable.scan(
-                FilterExpression="Creator = :username OR Invitee = :username AND begins_with(StatusDate, :status)",
-                ExpressionAttributeValues={
-                    ":username": username,
-                    ":status": status
-                }
-            )
-            return response.get('Items', [])
-        except ClientError as e:
-            print("Error getting games with status {}: {}".format(status, e))
+        return games
+
+    def getGamesWithStatus(self, user, status):
+        if user is None:
             return []
-
-    def checkIfTableIsActive(self):
-        """
-        Check if the games table is active.
-        """
         try:
-            response = self.cm.dynamodb.describe_table(TableName='Games')
-            return response['Table']['TableStatus'] == 'ACTIVE'
+            hostGamesInProgress = self.gamesTable.query(
+                IndexName="HostId-StatusDate-index",
+                KeyConditionExpression="HostId = :v_user AND begins_with(StatusDate, :v_status)",
+                ExpressionAttributeValues={
+                    ":v_user": user,
+                    ":v_status": status
+                },
+                Limit=10
+            )
+
+            oppGamesInProgress = self.gamesTable.query(
+                IndexName="OpponentId-StatusDate-index",
+                KeyConditionExpression="OpponentId = :v_user AND begins_with(StatusDate, :v_status)",
+                ExpressionAttributeValues={
+                    ":v_user": user,
+                    ":v_status": status
+                },
+                Limit=10
+            )
+
+            games = self.mergeQueries(iter(hostGamesInProgress['Items']), iter(oppGamesInProgress['Items']))
+            return games
         except ClientError as e:
-            print("Error checking if table is active: {}".format(e))
-            return False
+            print("Error getting games with status: {}".format(e))
+            return []
