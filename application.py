@@ -217,12 +217,11 @@ def accept_game(gameId):
     success = controller.acceptGameInvite(game, username)
     
     if success:
-        print(f"Game {gameId} accepted by {username}")
-        return redirect(f"/game={gameId}")
+        print("Game {} accepted by {}".format(gameId, username))
+        return redirect("/game={}".format(gameId))
     else:
         flash("Error accepting game invite.")
         return redirect("/index")
-
 
 @application.route('/reject/<gameId>', methods=['POST'])
 def reject_game(gameId):
