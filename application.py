@@ -168,76 +168,61 @@ def game(gameId):
         'gameId': gameId,
         'status': game.status,
         'turn': game.turn,
-        'board': boardState
+        'result': result
     }
-    gameJson = json.dumps(gameData)
-    return render_template("play.html",
-                           gameId=gameId,
-                           gameJson=gameJson,
-                           user=session["username"],
-                           status=status,
-                           turn=turn,
-                           opponent=game.getOpposingPlayer(session["username"]),
-                           result=result,
-                           TopLeft=boardState[0],
-                           TopMiddle=boardState[1],
-                           TopRight=boardState[2],
-                           MiddleLeft=boardState[3],
-                           MiddleMiddle=boardState[4],
-                           MiddleRight=boardState[5],
-                           BottomLeft=boardState[6],
-                           BottomMiddle=boardState[7],
-                           BottomRight=boardState[8])
 
-@application.route('/update', methods=["POST"])
-def update():
-    form = request.form
-    if form:
-        gameId = form.get("gameId")
-        position = form.get("position")
-        marker = form.get("marker")
+    return render_template("game.html", game=gameData, boardState=boardState, user=session["username"], status=status)
 
-        if controller.updateGameState(gameId, int(position), marker):
-            return jsonify(success=True)
-
-    return jsonify(success=False)
-
-@application.route('/accept/<gameId>', methods=['POST'])
-def accept_game(gameId):
-    if session.get("username") is None:
-        flash("You need to log in first.")
+@application.route('/accept=<gameId>', methods=["POST"])
+def accept(gameId):
+    if session.get("username", None) is None:
+        flash("Need to login")
         return redirect("/index")
-    
+
     game = controller.getGame(gameId)
     if game is None:
-        flash("Game not found.")
+        flash("Game does not exist")
         return redirect("/index")
-    
-    username = session["username"]
-    success = controller.acceptGameInvite(game, username)
-    
-    if success:
-        print "Game {} accepted by {}".format(gameId, username)
-        return redirect("/game=%s" % gameId)
+
+    if controller.acceptGameInvite(game, session["username"]):
+        flash("Game accepted!")
     else:
-        flash("Error accepting game invite.")
+        flash("There was an error accepting the game.")
+
+    return redirect('/index')
+
+@application.route('/reject=<gameId>', methods=["POST"])
+def reject(gameId):
+    if session.get("username", None) is None:
+        flash("Need to login")
         return redirect("/index")
 
-@application.route('/reject/<gameId>', methods=['POST'])
-def reject_game(gameId):
-    if session.get("username") is None:
-        flash("You need to log in first.")
-        return redirect("/index")
-    
     game = controller.getGame(gameId)
     if game is None:
-        flash("Game not found.")
+        flash("Game does not exist")
         return redirect("/index")
-    
-    # Implement your rejection logic here
-    # For now, just redirecting to index with a flash message
-    flash("Game invite rejected.")
-    return redirect("/index")
+
+    if controller.rejectGameInvite(game, session["username"]):
+        flash("Game invite rejected!")
+    else:
+        flash("There was an error rejecting the game.")
+
+    return redirect('/index')
+
+@application.route('/update=<gameId>', methods=["POST"])
+def update(gameId):
+    if session.get("username", None) is None:
+        flash("Need to login")
+        return redirect("/index")
+
+    position = request.form.get("position")
+    marker = session.get("username")
+    if controller.updateGameState(gameId, position, marker):
+        flash("Game state updated!")
+    else:
+        flash("Error updating game state.")
+
+    return redirect('/game=%s' % gameId)
 
 if __name__ == '__main__':
     application.run(host='0.0.0.0', port=serverPort)

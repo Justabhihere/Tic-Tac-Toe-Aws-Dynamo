@@ -17,49 +17,14 @@ class GameController:
         attributeUpdates = {
             "StatusDate": {"Value": statusDate, "Action": "PUT"}
         }
-
         try:
-            response = self.gamesTable.update_item(
+            self.gamesTable.update_item(
                 Key=key,
-                UpdateExpression="set StatusDate = :statusDate",
-                ExpressionAttributeValues={
-                    ":statusDate": statusDate
-                },
-                ReturnValues="UPDATED_NEW"
+                AttributeUpdates=attributeUpdates
             )
             return True
         except ClientError as e:
-            print "Error updating game invite: {}".format(e)
-            return False
-
-    def getGame(self, gameId):
-        """
-        Retrieve a game by its ID.
-        """
-        try:
-            response = self.gamesTable.get_item(Key={"GameId": gameId})
-            return response.get('Item', None)
-        except ClientError as e:
-            print "Error retrieving game: {}".format(e)
-            return None
-
-    def createNewGame(self, gameId, creator, invitee):
-        """
-        Create a new game entry.
-        """
-        item = {
-            "GameId": gameId,
-            "Creator": creator,
-            "Invitee": invitee,
-            "Status": "INVITED",
-            "Turn": creator,
-            "Board": [""] * 9
-        }
-        try:
-            self.gamesTable.put_item(Item=item)
-            return True
-        except ClientError as e:
-            print "Error creating new game: {}".format(e)
+            print "Error accepting game invite: {}".format(e)
             return False
 
     def getGameInvites(self, username):
@@ -84,83 +49,43 @@ class GameController:
 
     def getGamesWithStatus(self, username, status):
         """
-        Retrieve all games with a specific status for a user.
+        Retrieve all games for a specific user with a specific status.
         """
         try:
             response = self.gamesTable.scan(
-                FilterExpression="(Creator = :username or Invitee = :username) and #status = :status",
+                FilterExpression="Creator = :username or Invitee = :username",
                 ExpressionAttributeValues={
-                    ":username": username,
-                    ":status": status
-                },
-                ExpressionAttributeNames={
-                    "#status": "Status"
+                    ":username": username
                 }
             )
-            return response.get('Items', [])
+            games = [item for item in response.get('Items', []) if item.get('Status') == status]
+            return games
         except ClientError as e:
-            print "Error retrieving games with status '{}': {}".format(status, e)
+            print "Error retrieving games with status {}: {}".format(status, e)
             return []
 
-    def checkIfTableIsActive(self):
+    def getGame(self, gameId):
         """
-        Check if the DynamoDB table is active.
-        """
-        try:
-            response = self.cm.dynamodb.describe_table(TableName='Games')
-            status = response['Table']['TableStatus']
-            return status == 'ACTIVE'
-        except ClientError as e:
-            print "Error checking table status: {}".format(e)
-            return False
-
-    def getBoardState(self, game):
-        """
-        Retrieve the current board state for a game.
-        """
-        return game.get("Board", [""] * 9)
-
-    def checkForGameResult(self, boardState, game, username):
-        """
-        Check if there is a result for the game.
-        """
-        # Implement your game result checking logic here
-        # Return the result if available, otherwise return None
-        pass
-
-    def changeGameToFinishedState(self, game, result, username):
-        """
-        Change the game's status to finished.
+        Retrieve a specific game by gameId.
         """
         try:
-            key = {"GameId": game.get("GameId")}
-            update_expression = "set Status = :status, Result = :result"
-            expression_attribute_values = {
-                ":status": "FINISHED",
-                ":result": result
-            }
-            self.gamesTable.update_item(
-                Key=key,
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values
+            response = self.gamesTable.get_item(
+                Key={"GameId": gameId}
             )
-            return True
+            return response.get('Item', None)
         except ClientError as e:
-            print "Error updating game to finished state: {}".format(e)
-            return False
+            print "Error retrieving game: {}".format(e)
+            return None
 
     def updateGameState(self, gameId, position, marker):
         """
-        Update the state of the game with the marker at the specified position.
+        Update the game state with the current position and marker.
         """
         try:
-            response = self.gamesTable.update_item(
+            self.gamesTable.update_item(
                 Key={"GameId": gameId},
-                UpdateExpression="set Board[{}] = :marker".format(position),
-                ExpressionAttributeValues={
-                    ":marker": marker
-                },
-                ReturnValues="UPDATED_NEW"
+                UpdateExpression="SET board[{}] = :marker".format(position),
+                ExpressionAttributeValues={":marker": marker}
             )
             return True
         except ClientError as e:
