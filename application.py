@@ -64,35 +64,34 @@ def logout():
 
 @application.route('/table', methods=["GET", "POST"])
 def createTable():
-    cm.createGamesTable()
-    while not controller.checkIfTableIsActive():
-        time.sleep(3)
-    return redirect('/index')
+    try:
+        cm.createGamesTable()
+        while not controller.checkIfTableIsActive():
+            time.sleep(3)
+        return redirect('/index')
+    except Exception as e:
+        flash(f"Error creating table: {e}")
+        return redirect('/index')
 
 @application.route('/')
 @application.route('/index', methods=["GET", "POST"])
 def index():
     if session.get("username") is None:
-        form = request.form
-        if form:
-            formInput = form.get("username", "").strip()
+        if request.method == "POST":
+            formInput = request.form.get("username", "").strip()
             if formInput:
                 session["username"] = formInput
             else:
                 session.pop("username", None)
 
-    if request.method == "POST":
-        return redirect('/index')
-
     username = session.get("username")
     if username is None:
-        flash("You need to log in to view game invites.")
-        return redirect("/index")
+        return render_template("index.html", user=None)
 
     inviteGames = controller.getGameInvites(username)
     if inviteGames is None:
         flash("Table has not been created yet, please follow this link to create table.")
-        return render_template("table.html", user="")
+        return render_template("table.html", user=username)
 
     inviteGames = [Game(inviteGame) for inviteGame in inviteGames]
 
@@ -132,7 +131,7 @@ def play():
             return redirect("/create")
 
         if controller.createNewGame(gameId, creator, invitee):
-            return redirect("/game={}".format(gameId))
+            return redirect(f"/game={gameId}")
 
     flash("Something went wrong creating the game.")
     return redirect("/create")
