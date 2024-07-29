@@ -8,7 +8,7 @@ def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, us
         # Connect to local DynamoDB
         dynamodb = boto3.resource(
             'dynamodb',
-            endpoint_url=f'http://{endpoint}:{port}'
+            endpoint_url='http://{}:{}'.format(endpoint, port)
         )
     else:
         try:
