@@ -1,23 +1,22 @@
 import sys
 import os
-from flask import Flask, render_template, request, session, flash, redirect, jsonify, json
-from uuid import uuid4
-from configparser import ConfigParser
+import json
 import argparse
 import time
-
-# Append the path of the dynamodb directory to sys.path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'dynamodb'))
-
+from flask import Flask, render_template, request, session, flash, redirect, jsonify
+from uuid import uuid4
+from configparser import ConfigParser
+from datetime import datetime
 from connectionManager import ConnectionManager
 from gameController import GameController
 from models.game import Game
 
+# Append the path of the dynamodb directory to sys.path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'dynamodb'))
+
 application = Flask(__name__)
 application.debug = True
 application.secret_key = str(uuid4())
-
-cm = None
 
 parser = argparse.ArgumentParser(description='Run the TicTacToe sample app', prog='application.py')
 parser.add_argument('--config', help='Path to the config file containing application settings.')
@@ -66,13 +65,9 @@ def logout():
 
 @application.route('/table', methods=["GET", "POST"])
 def createTable():
-    try:
-        cm.createGamesTable()
-        while not controller.checkIfTableIsActive():
-            time.sleep(3)
-    except Exception as e:
-        flash("Error creating table: {}".format(e))
-        return redirect('/index')
+    cm.createGamesTable()
+    while not controller.checkIfTableIsActive():
+        time.sleep(3)
     return redirect('/index')
 
 @application.route('/')
@@ -81,8 +76,8 @@ def index():
     if session == {} or session.get("username", None) is None:
         form = request.form
         if form:
-            formInput = form.get("username", "").strip()
-            if formInput:
+            formInput = form.get("username")
+            if formInput and formInput.strip():
                 session["username"] = formInput
             else:
                 session["username"] = None
@@ -106,7 +101,7 @@ def index():
     fs = [Game(finishedGame) for finishedGame in finishedGames]
 
     return render_template("index.html",
-                           user=session.get("username"),
+                           user=session["username"],
                            invites=inviteGames,
                            inprogress=inProgressGames,
                            finished=fs)
@@ -116,13 +111,13 @@ def create():
     if session.get("username", None) is None:
         flash("Need to login to create game")
         return redirect("/index")
-    return render_template("create.html", user=session.get("username"))
+    return render_template("create.html", user=session["username"])
 
 @application.route('/play', methods=["POST"])
 def play():
     form = request.form
     if form:
-        creator = session.get("username")
+        creator = session["username"]
         gameId = str(uuid4())
         invitee = form.get("invitee", "").strip()
 
@@ -131,7 +126,7 @@ def play():
             return redirect("/create")
 
         if controller.createNewGame(gameId, creator, invitee):
-            return redirect("/game={}".format(gameId))
+            return redirect(f"/game={gameId}")
 
     flash("Something went wrong creating the game.")
     return redirect("/create")
@@ -148,31 +143,41 @@ def game(gameId):
         return redirect("/index")
 
     boardState = controller.getBoardState(item)
-    result = controller.checkForGameResult(boardState, item, session.get("username"))
+    result = controller.checkForGameResult(boardState, item, session["username"])
 
     if result is not None:
-        if not controller.changeGameToFinishedState(item, result, session.get("username")):
-            flash("Some error occurred while trying to finish game.")
+        if not controller.changeGameToFinishedState(item, result, session["username"]):
+            flash("Some error occurred while trying to finish the game.")
 
     game = Game(item)
     status = game.status
     turn = game.turn
 
-    if game.getResult(session.get("username")) is None:
+    # Check if 'Result' key exists in the game data
+    result = game.getResult(session.get("username"))
+    if result is None:
+        result = "No result available"
+    
+    if game.getResult(session["username"]) is None:
         if turn == game.o:
             turn += " (O)"
         else:
             turn += " (X)"
 
-    gameData = {'gameId': gameId, 'status': game.status, 'turn': game.turn, 'board': boardState}
+    gameData = {
+        'gameId': gameId,
+        'status': game.status,
+        'turn': game.turn,
+        'board': boardState
+    }
     gameJson = json.dumps(gameData)
     return render_template("play.html",
                            gameId=gameId,
                            gameJson=gameJson,
-                           user=session.get("username"),
+                           user=session["username"],
                            status=status,
                            turn=turn,
-                           opponent=game.getOpposingPlayer(session.get("username")),
+                           opponent=game.getOpposingPlayer(session["username"]),
                            result=result,
                            TopLeft=boardState[0],
                            TopMiddle=boardState[1],
