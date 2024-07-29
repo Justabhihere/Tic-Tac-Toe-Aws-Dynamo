@@ -121,22 +121,35 @@ class GameController:
             print("Error updating game state: {}".format(e))
             return False
 
-    def getGameInvites(self, username):
-        """
-        Get all game invites for a user.
-        """
-        try:
-            response = self.gamesTable.scan(
-                FilterExpression="Invitee = :username AND begins_with(StatusDate, :pending)",
-                ExpressionAttributeValues={
-                    ":username": username,
-                    ":pending": "PENDING_"
-                }
-            )
-            return response.get('Items', [])
-        except ClientError as e:
-            print("Error getting game invites: {}".format(e))
-            return []
+def acceptGameInvite(self, game, username):
+    """
+    Accept a game invite and update the game status to IN_PROGRESS.
+    """
+    date = str(datetime.now())
+    status = "IN_PROGRESS_"
+    statusDate = status + date
+    key = {"GameId": game.get("GameId")}
+    attributeUpdates = {
+        "StatusDate": {"Value": statusDate, "Action": "PUT"},
+        "AcceptedBy": {"Value": username, "Action": "PUT"}  # Store the username who accepted
+    }
+    conditions = {
+        "StatusDate": {
+            "AttributeValueList": ["PENDING_"],
+            "ComparisonOperator": "BEGINS_WITH"
+        }
+    }
+    try:
+        self.gamesTable.update_item(
+            Key=key,
+            AttributeUpdates=attributeUpdates,
+            Expected=conditions
+        )
+        return True
+    except ClientError as e:
+        print("Error accepting game invite: {}".format(e))
+        return False
+
 
     def getGamesWithStatus(self, username, status):
         """
