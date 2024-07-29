@@ -48,18 +48,20 @@ class GameController:
         status = "IN_PROGRESS_"
         statusDate = status + date
         key = {"GameId": game["GameId"]}
-        update_expression = "SET StatusDate = :statusDate"
-        condition_expression = "begins_with(StatusDate, :pending)"
-        expression_attribute_values = {
-            ":statusDate": statusDate,
-            ":pending": "PENDING_"
+        attributeUpdates = {
+            "StatusDate": {"Value": statusDate, "Action": "PUT"}
+        }
+        conditions = {
+            "StatusDate": {
+                "AttributeValueList": ["PENDING_"],
+                "ComparisonOperator": "BEGINS_WITH"
+            }
         }
         try:
             self.gamesTable.update_item(
                 Key=key,
-                UpdateExpression=update_expression,
-                ConditionExpression=condition_expression,
-                ExpressionAttributeValues=expression_attribute_values
+                AttributeUpdates=attributeUpdates,
+                Expected=conditions
             )
             return True
         except ClientError as e:
@@ -68,14 +70,14 @@ class GameController:
 
     def rejectGameInvite(self, game):
         key = {"GameId": game["GameId"]}
-        condition_expression = "begins_with(StatusDate, :pending)"
-        expression_attribute_values = {":pending": "PENDING_"}
+        condition = {
+            "StatusDate": {
+                "AttributeValueList": ["PENDING_"],
+                "ComparisonOperator": "BEGINS_WITH"
+            }
+        }
         try:
-            self.gamesTable.delete_item(
-                Key=key,
-                ConditionExpression=condition_expression,
-                ExpressionAttributeValues=expression_attribute_values
-            )
+            self.gamesTable.delete_item(Key=key, Expected=condition)
             return True
         except ClientError as e:
             print("Error rejecting game invite: {}".format(e))
@@ -87,10 +89,10 @@ class GameController:
         try:
             response = self.gamesTable.query(
                 IndexName="OpponentId-StatusDate-index",
-                KeyConditionExpression="OpponentId = :user AND begins_with(StatusDate, :status)",
+                KeyConditionExpression="OpponentId = :v_user AND begins_with(StatusDate, :v_status)",
                 ExpressionAttributeValues={
-                    ":user": user,
-                    ":status": "PENDING_"
+                    ":v_user": user,
+                    ":v_status": "PENDING_"
                 },
                 Limit=10
             )
@@ -110,21 +112,24 @@ class GameController:
         next_player = player_two if current_player == player_one else player_one
 
         key = {"GameId": gameId}
-        update_expression = "SET {} = :representation, Turn = :next_player".format(position)
-        condition_expression = "begins_with(StatusDate, :in_progress) AND Turn = :current_player AND attribute_not_exists({})".format(position)
-        expression_attribute_values = {
-            ":representation": representation,
-            ":next_player": next_player,
-            ":in_progress": "IN_PROGRESS_",
-            ":current_player": current_player
+        attributeUpdates = {
+            position: {"Value": representation, "Action": "PUT"},
+            "Turn": {"Value": next_player, "Action": "PUT"}
+        }
+        conditions = {
+            "StatusDate": {
+                "AttributeValueList": ["IN_PROGRESS_"],
+                "ComparisonOperator": "BEGINS_WITH"
+            },
+            "Turn": {"Value": current_player},
+            position: {"Exists": False}
         }
 
         try:
             self.gamesTable.update_item(
                 Key=key,
-                UpdateExpression=update_expression,
-                ConditionExpression=condition_expression,
-                ExpressionAttributeValues=expression_attribute_values
+                AttributeUpdates=attributeUpdates,
+                Expected=conditions
             )
             return True
         except ClientError as e:
@@ -219,20 +224,20 @@ class GameController:
         try:
             hostGamesInProgress = self.gamesTable.query(
                 IndexName="HostId-StatusDate-index",
-                KeyConditionExpression="HostId = :user AND begins_with(StatusDate, :status)",
+                KeyConditionExpression="HostId = :v_user AND begins_with(StatusDate, :v_status)",
                 ExpressionAttributeValues={
-                    ":user": user,
-                    ":status": status
+                    ":v_user": user,
+                    ":v_status": status
                 },
                 Limit=10
             )
 
             oppGamesInProgress = self.gamesTable.query(
                 IndexName="OpponentId-StatusDate-index",
-                KeyConditionExpression="OpponentId = :user AND begins_with(StatusDate, :status)",
+                KeyConditionExpression="OpponentId = :v_user AND begins_with(StatusDate, :v_status)",
                 ExpressionAttributeValues={
-                    ":user": user,
-                    ":status": status
+                    ":v_user": user,
+                    ":v_status": status
                 },
                 Limit=10
             )
