@@ -4,9 +4,10 @@ from botocore.exceptions import ClientError
 class GameController:
     def __init__(self, connectionManager):
         self.cm = connectionManager
+        # Access the table directly from the dynamodb resource
         self.gamesTable = self.cm.dynamodb.Table('Games')
 
-    def acceptGameInvite(self, game, username):
+    def acceptGameInvite(self, game):
         """
         Accept a game invite and update the game status to IN_PROGRESS.
         """
@@ -17,152 +18,163 @@ class GameController:
         attributeUpdates = {
             "StatusDate": {"Value": statusDate, "Action": "PUT"}
         }
-
+        conditions = {
+            "StatusDate": {
+                "AttributeValueList": ["PENDING_"],
+                "ComparisonOperator": "BEGINS_WITH"
+            }
+        }
         try:
-            response = self.gamesTable.update_item(
+            self.gamesTable.update_item(
                 Key=key,
-                UpdateExpression="set StatusDate = :statusDate",
-                ExpressionAttributeValues={
-                    ":statusDate": statusDate
-                },
-                ReturnValues="UPDATED_NEW"
+                AttributeUpdates=attributeUpdates,
+                Expected=conditions
             )
             return True
         except ClientError as e:
-            print "Error updating game invite: {}".format(e)
+            print("Error accepting game invite: {}".format(e))
             return False
 
     def getGame(self, gameId):
         """
-        Retrieve a game by its ID.
+        Retrieve a game item from the DynamoDB table.
         """
         try:
             response = self.gamesTable.get_item(Key={"GameId": gameId})
-            return response.get('Item', None)
+            return response.get('Item')
         except ClientError as e:
-            print "Error retrieving game: {}".format(e)
+            print("Error getting game: {}".format(e))
             return None
+
+    def getBoardState(self, gameItem):
+        """
+        Get the board state from the game item.
+        """
+        return gameItem.get('BoardState', [None]*9)
+
+    def checkForGameResult(self, boardState, gameItem, username):
+        """
+        Check if the game has a result based on the board state and game item.
+        """
+        # Placeholder for game result checking logic
+        # Example implementation: check if there is a result key
+        return gameItem.get('Result', None)
+
+    def changeGameToFinishedState(self, gameItem, result, username):
+        """
+        Change the game state to finished and update the result.
+        """
+        key = {"GameId": gameItem.get("GameId")}
+        attributeUpdates = {
+            "Status": {"Value": "FINISHED", "Action": "PUT"},
+            "Result": {"Value": result, "Action": "PUT"}
+        }
+        try:
+            self.gamesTable.update_item(
+                Key=key,
+                AttributeUpdates=attributeUpdates
+            )
+            return True
+        except ClientError as e:
+            print("Error updating game state: {}".format(e))
+            return False
 
     def createNewGame(self, gameId, creator, invitee):
         """
-        Create a new game entry.
+        Create a new game and add it to the DynamoDB table.
         """
         item = {
             "GameId": gameId,
             "Creator": creator,
             "Invitee": invitee,
-            "Status": "INVITED",
-            "Turn": creator,
-            "Board": [""] * 9
+            "StatusDate": "PENDING_",
+            "BoardState": [None]*9,
+            "Turn": creator
         }
         try:
             self.gamesTable.put_item(Item=item)
             return True
         except ClientError as e:
-            print "Error creating new game: {}".format(e)
-            return False
-
-    def getGameInvites(self, username):
-        """
-        Retrieve all game invites for a specific user.
-        """
-        try:
-            response = self.gamesTable.scan(
-                FilterExpression="Invitee = :username and #status = :status",
-                ExpressionAttributeValues={
-                    ":username": username,
-                    ":status": "INVITED"
-                },
-                ExpressionAttributeNames={
-                    "#status": "Status"
-                }
-            )
-            return response.get('Items', [])
-        except ClientError as e:
-            print "Error retrieving game invites: {}".format(e)
-            return []
-
-    def getGamesWithStatus(self, username, status):
-        """
-        Retrieve all games with a specific status for a user.
-        """
-        try:
-            response = self.gamesTable.scan(
-                FilterExpression="(Creator = :username or Invitee = :username) and #status = :status",
-                ExpressionAttributeValues={
-                    ":username": username,
-                    ":status": status
-                },
-                ExpressionAttributeNames={
-                    "#status": "Status"
-                }
-            )
-            return response.get('Items', [])
-        except ClientError as e:
-            print "Error retrieving games with status '{}': {}".format(status, e)
-            return []
-
-    def checkIfTableIsActive(self):
-        """
-        Check if the DynamoDB table is active.
-        """
-        try:
-            response = self.cm.dynamodb.describe_table(TableName='Games')
-            status = response['Table']['TableStatus']
-            return status == 'ACTIVE'
-        except ClientError as e:
-            print "Error checking table status: {}".format(e)
-            return False
-
-    def getBoardState(self, game):
-        """
-        Retrieve the current board state for a game.
-        """
-        return game.get("Board", [""] * 9)
-
-    def checkForGameResult(self, boardState, game, username):
-        """
-        Check if there is a result for the game.
-        """
-        # Implement your game result checking logic here
-        # Return the result if available, otherwise return None
-        pass
-
-    def changeGameToFinishedState(self, game, result, username):
-        """
-        Change the game's status to finished.
-        """
-        try:
-            key = {"GameId": game.get("GameId")}
-            update_expression = "set Status = :status, Result = :result"
-            expression_attribute_values = {
-                ":status": "FINISHED",
-                ":result": result
-            }
-            self.gamesTable.update_item(
-                Key=key,
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values
-            )
-            return True
-        except ClientError as e:
-            print "Error updating game to finished state: {}".format(e)
+            print("Error creating new game: {}".format(e))
             return False
 
     def updateGameState(self, gameId, position, marker):
         """
-        Update the state of the game with the marker at the specified position.
+        Update the board state of the game.
         """
         try:
-            response = self.gamesTable.update_item(
+            response = self.gamesTable.get_item(Key={"GameId": gameId})
+            item = response.get('Item', {})
+            boardState = item.get('BoardState', [None]*9)
+            boardState[position] = marker
+
+            attributeUpdates = {
+                "BoardState": {"Value": boardState, "Action": "PUT"},
+                "Turn": {"Value": marker, "Action": "PUT"}  # Switch turn
+            }
+            self.gamesTable.update_item(
                 Key={"GameId": gameId},
-                UpdateExpression="set Board[{}] = :marker".format(position),
-                ExpressionAttributeValues={
-                    ":marker": marker
-                },
-                ReturnValues="UPDATED_NEW"
+                AttributeUpdates=attributeUpdates
             )
             return True
         except ClientError as e:
-            print "Error updating game state: {}".format(e)
+            print("Error updating game state: {}".format(e))
+            return False
+
+def acceptGameInvite(self, game, username):
+    """
+    Accept a game invite and update the game status to IN_PROGRESS.
+    """
+    date = str(datetime.now())
+    status = "IN_PROGRESS_"
+    statusDate = status + date
+    key = {"GameId": game.get("GameId")}
+    attributeUpdates = {
+        "StatusDate": {"Value": statusDate, "Action": "PUT"},
+        "AcceptedBy": {"Value": username, "Action": "PUT"}  # Store the username who accepted
+    }
+    conditions = {
+        "StatusDate": {
+            "AttributeValueList": ["PENDING_"],
+            "ComparisonOperator": "BEGINS_WITH"
+        }
+    }
+    try:
+        self.gamesTable.update_item(
+            Key=key,
+            AttributeUpdates=attributeUpdates,
+            Expected=conditions
+        )
+        return True
+    except ClientError as e:
+        print("Error accepting game invite: {}".format(e))
+        return False
+
+
+    def getGamesWithStatus(self, username, status):
+        """
+        Get all games for a user with a specific status.
+        """
+        try:
+            response = self.gamesTable.scan(
+                FilterExpression="Creator = :username OR Invitee = :username AND begins_with(StatusDate, :status)",
+                ExpressionAttributeValues={
+                    ":username": username,
+                    ":status": status
+                }
+            )
+            return response.get('Items', [])
+        except ClientError as e:
+            print("Error getting games with status {}: {}".format(status, e))
+            return []
+
+    def checkIfTableIsActive(self):
+        """
+        Check if the games table is active.
+        """
+        try:
+            response = self.cm.dynamodb.describe_table(TableName='Games')
+            return response['Table']['TableStatus'] == 'ACTIVE'
+        except ClientError as e:
+            print("Error checking if table is active: {}".format(e))
             return False

@@ -28,14 +28,13 @@
         <div class="row">
             <div class="col-md-4">
                 <h2><b>Pending Invitations</b></h2>
-                {% if not invites %}
+                {% if invites == [] %}
                 <p>You currently have no invites.</p>
                 {% else %}
                 <table class="table">
                     <thead>
                         <tr>
                             <th style="padding-right: 100px;">From</th>
-                            <th>Date</th>
                             <th>Accept?</th>
                         </tr>
                     </thead>
@@ -43,10 +42,8 @@
                         {% for invite in invites %}
                         <tr>
                             <td style="padding-right: 100px;">
-                                {{ invite.creator }}  <!-- Use the correct attribute name -->
-                            </td>
-                            <td>
-                                {{ invite.date }}  <!-- Show date -->
+                                <div>{{ invite.hostId }}</div>
+                                <div>{{ invite.date }}</div>
                             </td>
                             <td>
                                 <form action="/accept={{ invite.gameId }}" method="post">
@@ -65,7 +62,7 @@
 
             <div class="col-md-4">
                 <h2><b>Games In-Progress</b></h2>
-                {% if not inprogress %}
+                {% if inprogress == [] %}
                 <p>You currently have no games in progress.</p>
                 {% else %}
                 <table class="table">
@@ -91,7 +88,7 @@
 
             <div class="col-md-4">
                 <h2><b>Recent History</b></h2>
-                {% if not finished %}
+                {% if finished == [] %}
                 <p>You don't have any recent games.</p>
                 {% else %}
                 <table class="table">
