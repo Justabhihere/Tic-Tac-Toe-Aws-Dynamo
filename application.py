@@ -7,8 +7,8 @@ from flask import Flask, render_template, request, session, flash, redirect, jso
 from uuid import uuid4
 from configparser import ConfigParser
 from datetime import datetime
-from connectionManager import ConnectionManager
-from gameController import GameController
+from dynamodb.connectionManager import ConnectionManager
+from dynamodb.gameController import GameController
 from models.game import Game
 
 # Append the path of the dynamodb directory to sys.path
