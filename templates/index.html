@@ -17,7 +17,7 @@
 
         <div class="text-center">
             <h1>
-                <a href="/create">
+                <a href="{{ url_for('create') }}">
                     <button style="height: 75px; width: 200px; font-size: 40px;" class="btn btn-success">CREATE</button>
                 </a>
             </h1>
@@ -28,7 +28,7 @@
         <div class="row">
             <div class="col-md-4">
                 <h2><b>Pending Invitations</b></h2>
-                {% if invites == [] %}
+                {% if not invites %}
                 <p>You currently have no invites.</p>
                 {% else %}
                 <table class="table">
@@ -46,11 +46,11 @@
                                 <div>{{ invite.date }}</div>
                             </td>
                             <td>
-                                <form action="/accept={{ invite.gameId }}" method="post">
-                                    <button class="btn btn-primary" name="response" value="{{ invite.gameId }}">Accept</button>
+                                <form action="{{ url_for('accept_game', gameId=invite.gameId) }}" method="post">
+                                    <button class="btn btn-primary" type="submit">Accept</button>
                                 </form>
-                                <form action="/reject={{ invite.gameId }}" method="post">
-                                    <button class="btn btn-danger" name="response" value="{{ invite.gameId }}">Reject</button>
+                                <form action="{{ url_for('reject_game', gameId=invite.gameId) }}" method="post">
+                                    <button class="btn btn-danger" type="submit">Reject</button>
                                 </form>
                             </td>
                         </tr>
@@ -62,7 +62,7 @@
 
             <div class="col-md-4">
                 <h2><b>Games In-Progress</b></h2>
-                {% if inprogress == [] %}
+                {% if not inprogress %}
                 <p>You currently have no games in progress.</p>
                 {% else %}
                 <table class="table">
@@ -76,7 +76,7 @@
                         {% for ipGame in inprogress %}
                         <tr>
                             <td style="padding-right: 125px;">
-                                <a href="/game={{ ipGame.gameId }}">{{ ipGame.getOpposingPlayer(user) }}</a>
+                                <a href="{{ url_for('game', gameId=ipGame.gameId) }}">{{ ipGame.getOpposingPlayer(user) }}</a>
                             </td>
                             <td>{{ ipGame.turn }}</td>
                         </tr>
@@ -88,7 +88,7 @@
 
             <div class="col-md-4">
                 <h2><b>Recent History</b></h2>
-                {% if finished == [] %}
+                {% if not finished %}
                 <p>You don't have any recent games.</p>
                 {% else %}
                 <table class="table">
@@ -102,7 +102,7 @@
                         {% for game in finished %}
                         <tr>
                             <td style="padding-right: 100px;">
-                                <a href="/game={{ game.gameId }}">{{ game.getOpposingPlayer(user) }}</a>
+                                <a href="{{ url_for('game', gameId=game.gameId) }}">{{ game.getOpposingPlayer(user) }}</a>
                             </td>
                             <td>{{ game.getResult(user) }}</td>
                         </tr>
