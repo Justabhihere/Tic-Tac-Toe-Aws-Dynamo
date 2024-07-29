@@ -1,10 +1,12 @@
-from datetime import datetime
+import boto3
 from botocore.exceptions import ClientError
+from datetime import datetime
 
 class GameController:
     def __init__(self, connectionManager):
         self.cm = connectionManager
-        self.gamesTable = self.cm.getTable('Games')
+        self.dynamodb = self.cm.get_dynamodb_resource()  # Assuming this method exists in your ConnectionManager
+        self.gamesTable = self.dynamodb.Table('Games')
 
     def acceptGameInvite(self, game, username):
         """
@@ -15,7 +17,7 @@ class GameController:
         statusDate = status + date
         key = {"GameId": game.get("GameId")}
         attributeUpdates = {
-            "StatusDate": {"Value": statusDate, "Action": "PUT"}
+            "StatusDate": statusDate
         }
         conditions = {
             "StatusDate": {
@@ -26,8 +28,14 @@ class GameController:
         try:
             self.gamesTable.update_item(
                 Key=key,
-                AttributeUpdates=attributeUpdates,
-                Expected=conditions
+                UpdateExpression="SET StatusDate = :statusDate",
+                ExpressionAttributeValues={
+                    ":statusDate": statusDate
+                },
+                ConditionExpression="begins_with(StatusDate, :pending)",
+                ExpressionAttributeValues={
+                    ":pending": "PENDING_"
+                }
             )
             return True
         except ClientError as e:
@@ -84,8 +92,8 @@ class GameController:
         statusDate = status + date
         key = {"GameId": game.get("GameId")}
         attributeUpdates = {
-            "StatusDate": {"Value": statusDate, "Action": "PUT"},
-            "Result": {"Value": result, "Action": "PUT"}
+            "StatusDate": statusDate,
+            "Result": result
         }
         conditions = {
             "StatusDate": {
@@ -96,8 +104,15 @@ class GameController:
         try:
             self.gamesTable.update_item(
                 Key=key,
-                AttributeUpdates=attributeUpdates,
-                Expected=conditions
+                UpdateExpression="SET StatusDate = :statusDate, Result = :result",
+                ExpressionAttributeValues={
+                    ":statusDate": statusDate,
+                    ":result": result
+                },
+                ConditionExpression="begins_with(StatusDate, :inProgress)",
+                ExpressionAttributeValues={
+                    ":inProgress": "IN_PROGRESS_"
+                }
             )
             return True
         except ClientError as e:
@@ -144,8 +159,8 @@ class GameController:
         Check if the 'Games' table is active.
         """
         try:
-            table_description = self.cm.getTable('Games').describe()
-            status = table_description.get('Table', {}).get('TableStatus', '')
+            table_description = self.dynamodb.Table('Games').description
+            status = table_description.get('TableStatus', '')
             return status == 'ACTIVE'
         except ClientError as e:
             print("Error checking table status: {}".format(e))
