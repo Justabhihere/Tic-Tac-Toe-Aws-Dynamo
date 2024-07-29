@@ -5,7 +5,7 @@ import argparse
 import time
 from flask import Flask, render_template, request, session, flash, redirect, jsonify
 from uuid import uuid4
-from configparser import ConfigParser
+from ConfigParser import ConfigParser
 from datetime import datetime
 from dynamodb.connectionManager import ConnectionManager
 from dynamodb.gameController import GameController
@@ -158,7 +158,7 @@ def game(gameId):
     if result is None:
         result = "No result available"
     
-    if game.getResult(session["username"]) is None:
+    if game.getResult(session.get("username")) is None:
         if turn == game.o:
             turn += " (O)"
         else:
@@ -217,11 +217,12 @@ def accept_game(gameId):
     success = controller.acceptGameInvite(game, username)
     
     if success:
-        print("Game {} accepted by {}".format(gameId, username))
-        return redirect("/game={}".format(gameId))
+        print "Game {} accepted by {}".format(gameId, username)
+        return redirect("/game=%s" % gameId)
     else:
         flash("Error accepting game invite.")
         return redirect("/index")
+
 
 @application.route('/reject/<gameId>', methods=['POST'])
 def reject_game(gameId):

@@ -4,10 +4,9 @@ from botocore.exceptions import ClientError
 class GameController:
     def __init__(self, connectionManager):
         self.cm = connectionManager
-        # Access the table directly from the dynamodb resource
-        self.gamesTable = self.cm.dynamodb.Table('Games')
+        self.gamesTable = self.cm.getTable('Games')
 
-    def acceptGameInvite(self, game):
+    def acceptGameInvite(self, game, username):
         """
         Accept a game invite and update the game status to IN_PROGRESS.
         """
@@ -35,64 +34,90 @@ class GameController:
             print("Error accepting game invite: {}".format(e))
             return False
 
+    def getGameInvites(self, username):
+        """
+        Get all game invites for a user.
+        """
+        try:
+            response = self.gamesTable.scan(
+                FilterExpression="Invitee = :username AND begins_with(StatusDate, :pending)",
+                ExpressionAttributeValues={
+                    ":username": username,
+                    ":pending": "PENDING_"
+                }
+            )
+            return response.get('Items', [])
+        except ClientError as e:
+            print("Error getting game invites: {}".format(e))
+            return []
+
     def getGame(self, gameId):
         """
-        Retrieve a game item from the DynamoDB table.
+        Retrieve a game by its ID.
         """
         try:
             response = self.gamesTable.get_item(Key={"GameId": gameId})
-            return response.get('Item')
+            return response.get('Item', None)
         except ClientError as e:
             print("Error getting game: {}".format(e))
             return None
 
-    def getBoardState(self, gameItem):
+    def getBoardState(self, game):
         """
-        Get the board state from the game item.
+        Retrieve the board state from the game item.
         """
-        return gameItem.get('BoardState', [None]*9)
+        return game.get('BoardState', [None] * 9)
 
-    def checkForGameResult(self, boardState, gameItem, username):
+    def checkForGameResult(self, boardState, game, username):
         """
-        Check if the game has a result based on the board state and game item.
+        Check for the result of the game.
         """
-        # Placeholder for game result checking logic
-        # Example implementation: check if there is a result key
-        return gameItem.get('Result', None)
+        # Placeholder for actual game result logic
+        return game.get('Result', None)
 
-    def changeGameToFinishedState(self, gameItem, result, username):
+    def changeGameToFinishedState(self, game, result, username):
         """
-        Change the game state to finished and update the result.
+        Change the game state to finished.
         """
-        key = {"GameId": gameItem.get("GameId")}
+        date = str(datetime.now())
+        status = "FINISHED_"
+        statusDate = status + date
+        key = {"GameId": game.get("GameId")}
         attributeUpdates = {
-            "Status": {"Value": "FINISHED", "Action": "PUT"},
+            "StatusDate": {"Value": statusDate, "Action": "PUT"},
             "Result": {"Value": result, "Action": "PUT"}
+        }
+        conditions = {
+            "StatusDate": {
+                "AttributeValueList": ["IN_PROGRESS_"],
+                "ComparisonOperator": "BEGINS_WITH"
+            }
         }
         try:
             self.gamesTable.update_item(
                 Key=key,
-                AttributeUpdates=attributeUpdates
+                AttributeUpdates=attributeUpdates,
+                Expected=conditions
             )
             return True
         except ClientError as e:
-            print("Error updating game state: {}".format(e))
+            print("Error changing game to finished state: {}".format(e))
             return False
 
     def createNewGame(self, gameId, creator, invitee):
         """
-        Create a new game and add it to the DynamoDB table.
+        Create a new game item.
         """
-        item = {
-            "GameId": gameId,
-            "Creator": creator,
-            "Invitee": invitee,
-            "StatusDate": "PENDING_",
-            "BoardState": [None]*9,
-            "Turn": creator
-        }
         try:
-            self.gamesTable.put_item(Item=item)
+            self.gamesTable.put_item(
+                Item={
+                    "GameId": gameId,
+                    "Creator": creator,
+                    "Invitee": invitee,
+                    "StatusDate": "PENDING_{}".format(str(datetime.now())),
+                    "BoardState": [None] * 9
+                }
+            )
             return True
         except ClientError as e:
             print("Error creating new game: {}".format(e))
@@ -100,81 +125,28 @@ class GameController:
 
     def updateGameState(self, gameId, position, marker):
         """
-        Update the board state of the game.
+        Update the game state with a new move.
         """
         try:
-            response = self.gamesTable.get_item(Key={"GameId": gameId})
-            item = response.get('Item', {})
-            boardState = item.get('BoardState', [None]*9)
-            boardState[position] = marker
-
-            attributeUpdates = {
-                "BoardState": {"Value": boardState, "Action": "PUT"},
-                "Turn": {"Value": marker, "Action": "PUT"}  # Switch turn
-            }
-            self.gamesTable.update_item(
+            response = self.gamesTable.update_item(
                 Key={"GameId": gameId},
-                AttributeUpdates=attributeUpdates
+                UpdateExpression="SET BoardState[{}] = :marker".format(position),
+                ExpressionAttributeValues={":marker": marker},
+                ReturnValues="UPDATED_NEW"
             )
-            return True
+            return response.get('Attributes') is not None
         except ClientError as e:
             print("Error updating game state: {}".format(e))
             return False
 
-def acceptGameInvite(self, game, username):
-    """
-    Accept a game invite and update the game status to IN_PROGRESS.
-    """
-    date = str(datetime.now())
-    status = "IN_PROGRESS_"
-    statusDate = status + date
-    key = {"GameId": game.get("GameId")}
-    attributeUpdates = {
-        "StatusDate": {"Value": statusDate, "Action": "PUT"},
-        "AcceptedBy": {"Value": username, "Action": "PUT"}  # Store the username who accepted
-    }
-    conditions = {
-        "StatusDate": {
-            "AttributeValueList": ["PENDING_"],
-            "ComparisonOperator": "BEGINS_WITH"
-        }
-    }
-    try:
-        self.gamesTable.update_item(
-            Key=key,
-            AttributeUpdates=attributeUpdates,
-            Expected=conditions
-        )
-        return True
-    except ClientError as e:
-        print("Error accepting game invite: {}".format(e))
-        return False
-
-
-    def getGamesWithStatus(self, username, status):
-        """
-        Get all games for a user with a specific status.
-        """
-        try:
-            response = self.gamesTable.scan(
-                FilterExpression="Creator = :username OR Invitee = :username AND begins_with(StatusDate, :status)",
-                ExpressionAttributeValues={
-                    ":username": username,
-                    ":status": status
-                }
-            )
-            return response.get('Items', [])
-        except ClientError as e:
-            print("Error getting games with status {}: {}".format(status, e))
-            return []
-
     def checkIfTableIsActive(self):
         """
-        Check if the games table is active.
+        Check if the 'Games' table is active.
         """
         try:
-            response = self.cm.dynamodb.describe_table(TableName='Games')
-            return response['Table']['TableStatus'] == 'ACTIVE'
+            table_description = self.cm.getTable('Games').describe()
+            status = table_description.get('Table', {}).get('TableStatus', '')
+            return status == 'ACTIVE'
         except ClientError as e:
-            print("Error checking if table is active: {}".format(e))
+            print("Error checking table status: {}".format(e))
             return False
