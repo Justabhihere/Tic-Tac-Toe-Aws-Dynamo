@@ -129,7 +129,7 @@ def play():
             return redirect("/create")
 
         if controller.createNewGame(gameId, creator, invitee):
-            return redirect(f"/game={gameId}")
+            return redirect("/game={}".format(gameId))
 
     flash("Something went wrong creating the game.")
     return redirect("/create")
