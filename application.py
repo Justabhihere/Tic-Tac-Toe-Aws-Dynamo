@@ -126,7 +126,7 @@ def play():
             return redirect("/create")
 
         if controller.createNewGame(gameId, creator, invitee):
-            return redirect(f"/game={gameId}")
+            return redirect("/game=%s" % gameId)
 
     flash("Something went wrong creating the game.")
     return redirect("/create")
@@ -201,6 +201,39 @@ def update():
             return jsonify(success=True)
 
     return jsonify(success=False)
+
+@application.route('/accept/<gameId>', methods=['POST'])
+def accept_game(gameId):
+    if session.get("username") is None:
+        flash("You need to log in first.")
+        return redirect("/index")
+    
+    game = controller.getGame(gameId)
+    if game is None:
+        flash("Game not found.")
+        return redirect("/index")
+    
+    if controller.acceptGameInvite(game):
+        return redirect("/game=%s" % gameId)
+    else:
+        flash("Error accepting game invite.")
+        return redirect("/index")
+
+@application.route('/reject/<gameId>', methods=['POST'])
+def reject_game(gameId):
+    if session.get("username") is None:
+        flash("You need to log in first.")
+        return redirect("/index")
+    
+    game = controller.getGame(gameId)
+    if game is None:
+        flash("Game not found.")
+        return redirect("/index")
+    
+    # Implement your rejection logic here
+    # For now, just redirecting to index with a flash message
+    flash("Game invite rejected.")
+    return redirect("/index")
 
 if __name__ == '__main__':
     application.run(host='0.0.0.0', port=serverPort)
