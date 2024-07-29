@@ -137,7 +137,7 @@ Once all content is ready, Navigate to the project location and run below comman
 #make sure to open required port (5000) in ec2 security group
 
 ```bash
-python application.py --config config.ini --mode service --endpoint dynamodb.ap-south-2.amazonaws.com --serverPort 5000
+python application.py --config config.ini --mode service --endpoint dynamodb.eu-north-1.amazonaws.com --serverPort 5000
 ```
 
 Then Open browser and enter **http://instance-public-ip:5000/** and enter to access the application.
