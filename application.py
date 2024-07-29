@@ -5,7 +5,7 @@ import argparse
 import time
 from flask import Flask, render_template, request, session, flash, redirect, jsonify
 from uuid import uuid4
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 from datetime import datetime
 from dynamodb.connectionManager import ConnectionManager
 from dynamodb.gameController import GameController
@@ -222,7 +222,6 @@ def accept_game(gameId):
     else:
         flash("Error accepting game invite.")
         return redirect("/index")
-
 
 @application.route('/reject/<gameId>', methods=['POST'])
 def reject_game(gameId):
