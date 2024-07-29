@@ -1,7 +1,7 @@
 import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+from urllib2 import urlopen
 import json
-from urllib.request import urlopen
 
 def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, use_instance_metadata=False):
     if local:
