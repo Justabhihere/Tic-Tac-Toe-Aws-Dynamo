@@ -116,7 +116,7 @@ Clones the TicTacToe project repository from GitHub into the `/home/ec2-user/` d
 
 ```bash
 cd /home/ec2-user/
-git clone https://github.com/avizway1/tictactoe-with-DynamoDB.git
+git clone https://github.com/Justabhihere/Tic-Tac-Toe-Aws-Dynamo.git
 ```
 
 Create a file inside the code location provide file name as "config.ini" and add below entry. make sure to change the region accordingly.

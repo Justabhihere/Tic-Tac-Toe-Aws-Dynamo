@@ -8,7 +8,7 @@ endpoint=dynamodb.eu-north-1.amazonaws.com
 # aws_secret_access_key=<secret_key>
 # aws_access_key_id=<key_id>
 
-[flask]
+[flask] 
 # This configures flask's secret key, used for encrypting cookies.  If you are running only one flask process / server,
 # You can leave this blank and one will be generated randomly at start up.  When you restart, all existing sessions
 # will be lost.  Or instead, generate a secret key by running python:
