@@ -130,6 +130,7 @@ def play():
     flash("Something went wrong creating the game.")
     return redirect("/create")
 
+
 @application.route('/game=<gameId>')
 def game(gameId):
     if session.get("username", None) is None:
