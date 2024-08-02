@@ -1,94 +1,78 @@
-import boto3
-from botocore.exceptions import NoCredentialsError, PartialCredentialsError
-from urllib2 import urlopen
+from boto.exception import JSONResponseError
+from boto.dynamodb2.fields import KeysOnlyIndex, GlobalAllIndex, HashKey, RangeKey
+from boto.dynamodb2.layer1 import DynamoDBConnection
+from boto.dynamodb2.table import Table
+
+try:
+    from urllib.request import urlopen
+except ImportError:
+    from urllib2 import urlopen
 import json
 
-
 def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, use_instance_metadata=False):
-    if local:
-        # Connect to local DynamoDB
-        dynamodb = boto3.resource(
-            'dynamodb',
-            endpoint_url='http://{}:{}'.format(endpoint, port)
-        )
-    else:
-        try:
-            session = boto3.Session()  # Create a session to use the default profile or environment variables
-            dynamodb = session.resource('dynamodb')
-        except NoCredentialsError:
-            print("No AWS credentials found.")
-            raise
-        except PartialCredentialsError:
-            print("Incomplete AWS credentials.")
-            raise
-        except Exception as e:
-            print("Error connecting to DynamoDB: {}".format(e))
-            raise
+    params = {
+        'is_secure': True
+    }
 
-    return dynamodb
+    # Read from config file, if provided
+    if config is not None:
+        if config.has_option('dynamodb', 'region'):
+            params['region'] = config.get('dynamodb', 'region')
+        if config.has_option('dynamodb', 'endpoint'):
+            params['host'] = config.get('dynamodb', 'endpoint')
 
-def createGamesTable(dynamodb):
+    # Use the endpoint specified on the command-line to trump the config file
+    if endpoint is not None:
+        params['host'] = endpoint
+        if 'region' in params:
+            del params['region']
+
+    # Only auto-detect the DynamoDB endpoint if the endpoint was not specified through other config
+    if 'host' not in params and use_instance_metadata:
+        response = urlopen('http://169.254.169.254/latest/dynamic/instance-identity/document').read()
+        doc = json.loads(response)
+        params['host'] = 'dynamodb.%s.amazonaws.com' % (doc['region'])
+        if 'region' in params:
+            del params['region']
+
+    db = DynamoDBConnection(**params)
+    return db
+
+def createGamesTable(db):
     try:
-        # Create the DynamoDB client
-        client = dynamodb.meta.client
+        hostStatusDate = GlobalAllIndex("HostId-StatusDate-index",
+                                        parts=[HashKey("HostId"), RangeKey("StatusDate")],
+                                        throughput={
+                                            'read': 1,
+                                            'write': 1
+                                        })
+        opponentStatusDate = GlobalAllIndex("OpponentId-StatusDate-index",
+                                            parts=[HashKey("OpponentId"), RangeKey("StatusDate")],
+                                            throughput={
+                                                'read': 1,
+                                                'write': 1
+                                            })
 
-        # Define the global secondary indexes
-        global_indexes = [
-            {
-                'IndexName': 'HostId-StatusDate-index',
-                'KeySchema': [
-                    {'AttributeName': 'HostId', 'KeyType': 'HASH'},
-                    {'AttributeName': 'StatusDate', 'KeyType': 'RANGE'}
-                ],
-                'Projection': {
-                    'ProjectionType': 'ALL'
-                },
-                'ProvisionedThroughput': {
-                    'ReadCapacityUnits': 1,
-                    'WriteCapacityUnits': 1
-                }
-            },
-            {
-                'IndexName': 'OpponentId-StatusDate-index',
-                'KeySchema': [
-                    {'AttributeName': 'OpponentId', 'KeyType': 'HASH'},
-                    {'AttributeName': 'StatusDate', 'KeyType': 'RANGE'}
-                ],
-                'Projection': {
-                    'ProjectionType': 'ALL'
-                },
-                'ProvisionedThroughput': {
-                    'ReadCapacityUnits': 1,
-                    'WriteCapacityUnits': 1
-                }
-            }
-        ]
+        # Global secondary indexes
+        GSI = [hostStatusDate, opponentStatusDate]
 
-        # Create the table
-        table = dynamodb.create_table(
-            TableName='Games',
-            KeySchema=[
-                {'AttributeName': 'GameId', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'GameId', 'AttributeType': 'S'},
-                {'AttributeName': 'HostId', 'AttributeType': 'S'},
-                {'AttributeName': 'OpponentId', 'AttributeType': 'S'},
-                {'AttributeName': 'StatusDate', 'AttributeType': 'S'}
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 1,
-                'WriteCapacityUnits': 1
-            },
-            GlobalSecondaryIndexes=global_indexes
-        )
+        # Use IAM role credentials by omitting aws_access_key_id and aws_secret_access_key
+        gamesTable = Table.create("Games",
+                                  schema=[HashKey("GameId")],
+                                  throughput={
+                                      'read': 1,
+                                      'write': 1
+                                  },
+                                  global_indexes=GSI,
+                                  connection=db)
 
-        # Wait until the table exists
-        table.meta.client.get_waiter('table_exists').wait(TableName='Games')
+    except JSONResponseError as jre:
+        try:
+            gamesTable = Table("Games", connection=db)
+        except Exception as e:
+            print("Games Table doesn't exist.")
 
-        print("Table {} created.".format(table.table_name))
-        return table
+    finally:
+        return gamesTable
 
-    except Exception as e:
-        print("Error creating table: {}".format(e))
-        raise
+
