@@ -94,7 +94,7 @@ def index():
     inviteGames = [Game(inviteGame) for inviteGame in inviteGames]
 
     inProgressGames = controller.getGamesWithStatus(session.get("username"), "IN_PROGRESS")
-    inProgressGames = [Game(inProgressGame) for inProgressGames in inProgressGames]
+    inProgressGames = [Game(inProgressGame) for inProgressGame in inProgressGames]
 
     finishedGames = controller.getGamesWithStatus(session.get("username"), "FINISHED")
     fs = [Game(finishedGame) for finishedGame in finishedGames]
@@ -129,7 +129,6 @@ def play():
 
     flash("Something went wrong creating the game.")
     return redirect("/create")
-
 
 @application.route('/game=<gameId>')
 def game(gameId):
