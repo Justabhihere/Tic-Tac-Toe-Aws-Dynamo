@@ -155,13 +155,12 @@ def game(gameId):
     # Safe access to 'Result' key
     result = game.getResult(session.get("username"))
     if result is None:
-        result = "No result available"
-    
-    if result is None:
-        if turn == game.o:
-            turn += " (O)"
-        else:
-            turn += " (X)"
+        result = "No result available"  # Handle missing Result key
+
+    if turn == game.o:
+        turn += " (O)"
+    else:
+        turn += " (X)"
 
     gameData = {
         'gameId': gameId,
@@ -187,6 +186,7 @@ def game(gameId):
                            BottomLeft=boardState[6],
                            BottomMiddle=boardState[7],
                            BottomRight=boardState[8])
+
 
 @application.route('/update', methods=["POST"])
 def update():
