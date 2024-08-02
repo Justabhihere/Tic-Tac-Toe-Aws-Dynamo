@@ -5,14 +5,13 @@ import argparse
 import time
 from flask import Flask, render_template, request, session, flash, redirect, jsonify
 from uuid import uuid4
-from configparser import ConfigParser
+from ConfigParser import ConfigParser  # Note the change in import name
 from datetime import datetime
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'dynamodb'))
 from dynamodb.connectionManager import ConnectionManager
 from dynamodb.gameController import GameController
 from models.game import Game
-
-# Append the path of the dynamodb directory to sys.path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'dynamodb'))
 
 application = Flask(__name__)
 application.debug = True
@@ -153,12 +152,12 @@ def game(gameId):
     status = game.status
     turn = game.turn
 
-    # Check if 'Result' key exists in the game data
+    # Safe access to 'Result' key
     result = game.getResult(session.get("username"))
     if result is None:
         result = "No result available"
     
-    if game.getResult(session["username"]) is None:
+    if result is None:
         if turn == game.o:
             turn += " (O)"
         else:
@@ -231,7 +230,6 @@ def reject_game(gameId):
         return redirect("/index")
     
     # Implement your rejection logic here
-    # For now, just redirecting to index with a flash message
     flash("Game invite rejected.")
     return redirect("/index")
 
