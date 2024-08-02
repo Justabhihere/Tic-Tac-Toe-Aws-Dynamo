@@ -1,17 +1,22 @@
 {% extends "board.html" %}
 {% block addon %}
 <script lang="text/javascript">
-    // Your existing JavaScript code remains unchanged
+    // JavaScript code to handle the real-time game status checking
     var gameRaw = '{{ gameJson|safe }}';
     var game = JSON.parse(gameRaw);
     var gameString = JSON.stringify(game);
     var gameId = '{{ gameId }}';
     var loadDate = new Date();
     var interval;
+
+    // Start checking the game status if it's not finished
     if (game.status !== "FINISHED") {
         interval = window.setInterval(checkChanged, 1000);
     }
+
     var xmlHttp;
+    
+    // Function to check if the game state has changed
     function checkChanged() {
         window.clearInterval(interval);
         xmlHttp = new XMLHttpRequest();
@@ -19,15 +24,25 @@
         xmlHttp.open('GET', '/gameData=' + gameId, true);
         xmlHttp.send(null);
     }
+
+    // Function to handle the response and refresh the page if necessary
     function isChanged() {
         if (xmlHttp.readyState === 4) {
             if (xmlHttp.status === 200) {
-                var latest = JSON.stringify(JSON.parse(xmlHttp.responseText));
-                var loaded = gameString;
-                if (latest !== loaded) {
-                    location.reload();
+                try {
+                    var latest = JSON.stringify(JSON.parse(xmlHttp.responseText));
+                    var loaded = gameString;
+                    if (latest !== loaded) {
+                        location.reload();
+                    }
+                } catch (e) {
+                    console.error('Failed to parse JSON response', e);
                 }
+            } else {
+                console.error('Error fetching game data', xmlHttp.status);
             }
+            
+            // Continue checking for changes until 5 minutes have passed
             var currentDate = new Date();
             var elapsedMs = currentDate.getTime() - loadDate.getTime();
             if (elapsedMs < (5 * 60 * 1000)) {
@@ -40,6 +55,7 @@
 </script>
 
 <style>
+    /* CSS styles for the game interface */
     .game-container {
         max-width: 800px;
         margin: 2rem auto;
@@ -77,21 +93,26 @@
 </style>
 
 <div class="game-container">
+    <!-- Flash messages section -->
     <div class="alert alert-info game-alert">
         {% with messages = get_flashed_messages() %}
         {% if messages %}
             {% for msg in messages %}
-                {{ msg }}
+                <p>{{ msg }}</p>
             {% endfor %}
         {% endif %}
         {% endwith %}
     </div>
+    
+    <!-- Game details section -->
     <div class="game-details">
         <p><strong>Game ID:</strong> {{ gameId }}</p>
         <p><strong>Opponent:</strong> {{ opponent }}</p>
         <p><strong>Status:</strong> {{ status }}</p>
         <p><strong>Turn:</strong> {{ turn }}</p>
     </div>
+    
+    <!-- Play again button if the game is finished -->
     {% if status == 'FINISHED' %}
     <div class="play-again">
         <form action="/play" method="post">
